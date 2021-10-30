@@ -330,7 +330,7 @@ contract Bridge is Pausable, AccessControl, SafeMath {
         - GenericHandler: responds with the raw bytes returned from the call to the target contract.
      */
     function deposit(uint8 destinationDomainID, bytes32 resourceID, bytes calldata data) external payable whenNotPaused {
-        require(msg.value == _fee, "Incorrect fee supplied");
+        require(msg.value >= _fee, "Incorrect fee supplied");
 
         address handler = _resourceIDToHandlerAddress[resourceID];
         require(handler != address(0), "resourceID not mapped to handler");
@@ -338,7 +338,14 @@ contract Bridge is Pausable, AccessControl, SafeMath {
         uint64 depositNonce = ++_depositCounts[destinationDomainID];
 
         IDepositExecute depositHandler = IDepositExecute(handler);
-        bytes memory handlerResponse = depositHandler.deposit(resourceID, msg.sender, data);
+
+        uint256 depositVal = 0;
+        // If native coin deposit, should transfer coin to handler
+        if (depositHandler.isNative()) {
+            depositVal = sub(msg.value, _fee);
+        }
+        bytes memory handlerResponse = depositHandler.deposit{value: depositVal, gas: 10000}(resourceID, msg.sender, data);
+        // bytes memory handlerResponse = depositHandler.deposit(resourceID, msg.sender, data);
 
         emit Deposit(destinationDomainID, resourceID, depositNonce, msg.sender, data, handlerResponse);
     }

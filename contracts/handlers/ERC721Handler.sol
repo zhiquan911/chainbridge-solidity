@@ -43,7 +43,7 @@ contract ERC721Handler is IDepositExecute, HandlerHelpers, ERC721Safe {
     function deposit(bytes32    resourceID,
                     address     depositer,
                     bytes       calldata data
-                    ) external override onlyBridge returns (bytes memory metaData) {
+                    ) external payable override onlyBridge returns (bytes memory metaData) {
         uint         tokenID;
 
         (tokenID) = abi.decode(data, (uint));
@@ -114,5 +114,12 @@ contract ERC721Handler is IDepositExecute, HandlerHelpers, ERC721Safe {
      */
     function withdraw(address tokenAddress, address recipient, uint tokenID) external override onlyBridge {
         releaseERC721(tokenAddress, address(this), recipient, tokenID);
+    }
+
+    /**
+        @notice is native coin
+     */
+    function isNative() external override returns (bool) {
+        return false;
     }
 }

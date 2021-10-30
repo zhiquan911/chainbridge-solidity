@@ -11,7 +11,7 @@ import "../ERC20Safe.sol";
     @author ChainSafe Systems.
     @notice This contract is intended to be used with the Bridge contract.
  */
-contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
+contract NativeHandler is IDepositExecute, HandlerHelpers, ERC20Safe {
     /**
         @param bridgeAddress Contract address of previously deployed Bridge.
      */
@@ -38,15 +38,7 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
     ) external payable override onlyBridge returns (bytes memory) {
         uint256        amount;
         (amount) = abi.decode(data, (uint));
-
-        address tokenAddress = _resourceIDToTokenContractAddress[resourceID];
-        require(_contractWhitelist[tokenAddress], "provided tokenAddress is not whitelisted");
-
-        if (_burnList[tokenAddress]) {
-            burnERC20(tokenAddress, depositer, amount);
-        } else {
-            lockERC20(tokenAddress, depositer, address(this), amount);
-        }
+        require(msg.value == amount, "Incorrect amount");
     }
 
     /**
@@ -79,7 +71,9 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         if (_burnList[tokenAddress]) {
             mintERC20(tokenAddress, address(recipientAddress), amount);
         } else {
-            releaseERC20(tokenAddress, address(recipientAddress), amount);
+            //native coin release
+            address payable target = address(uint160(recipientAddress));
+            target.transfer(amount);
         }
     }
 
@@ -90,13 +84,15 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         @param amount The amount of ERC20 tokens to release.
      */
     function withdraw(address tokenAddress, address recipient, uint amount) external override onlyBridge {
-        releaseERC20(tokenAddress, recipient, amount);
+        //native coin release
+        address payable target = address(uint160(recipient));
+        target.transfer(amount);
     }
 
     /**
         @notice is native coin
      */
     function isNative() external override returns (bool) {
-        return false;
+        return true;
     }
 }
