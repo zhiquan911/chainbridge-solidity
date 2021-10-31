@@ -87,11 +87,6 @@ contract('Bridge - [deposit - Native coin]', async (accounts) => {
         // assert.strictEqual(originChainDepositerBalance.toNumber(), originChainInitialTokenAmount);
     });
 
-    // it("[sanity] test OriginERC20HandlerInstance.address' allowance", async () => {
-    //     const originChainHandlerAllowance = await OriginERC20MintableInstance.allowance(depositerAddress, OriginNativeHandlerInstance.address);
-    //     assert.strictEqual(originChainHandlerAllowance.toNumber(), depositAmount * 2);
-    // });
-
     it('Native coin deposit can be made', async () => {
         await TruffleAssert.passes(BridgeInstance.deposit(
             destinationDomainID,
@@ -179,7 +174,8 @@ contract('Bridge - [deposit - Native coin]', async (accounts) => {
 
         const totalSupply = await DestinationERC20MintableInstance.totalSupply();
         console.log("totalSupply:", totalSupply.toNumber())
-        
+        assert.strictEqual(totalSupply.toNumber(), depositAmount);
+
         await TruffleAssert.passes(BridgeInstance2.deposit(
             originDomainID,
             resourceID,
@@ -190,5 +186,39 @@ contract('Bridge - [deposit - Native coin]', async (accounts) => {
         const recipientBalance = await DestinationERC20MintableInstance.balanceOf(recipientAddress);
         console.log("destChainRecipient balance2:", recipientBalance.toNumber())
         assert.strictEqual(recipientBalance.toNumber(), 0);
+    });
+
+    it('Original Chain Execution successful', async () => {
+
+        const withdrawVote = (relayer) => BridgeInstance.voteProposal(originDomainID, expectedDepositNonce, resourceID, withdrawData, { from: relayer });
+
+        await BridgeInstance.deposit(
+            destinationDomainID,
+            resourceID,
+            depositData,
+            { from: depositerAddress, value: depositAmount }
+        );
+
+        var originChainHandlerBalance = await web3.eth.getBalance(OriginNativeHandlerInstance.address);
+        assert.strictEqual(originChainHandlerBalance, depositAmount.toString());
+
+        var originChainDepositerBalance = await web3.eth.getBalance(depositerAddress);
+        console.log("originChainDepositer balance 1:", originChainDepositerBalance)
+
+        await TruffleAssert.passes(withdrawVote(relayer1Address));
+        const voteWithExecuteTx = await withdrawVote(relayer2Address); // After this vote, automatically executes the proposal.
+        TruffleAssert.eventEmitted(voteWithExecuteTx, 'ProposalEvent', (event) => {
+            return event.originDomainID.toNumber() === originDomainID &&
+                event.depositNonce.toNumber() === expectedDepositNonce &&
+                event.status.toNumber() === expectedFinalizedEventStatus &&
+                event.dataHash === withdrawDataHash
+        });
+
+        originChainHandlerBalance = await web3.eth.getBalance(OriginNativeHandlerInstance.address);
+        assert.strictEqual(originChainHandlerBalance, '0');
+        
+        originChainDepositerBalance = await web3.eth.getBalance(depositerAddress);
+        console.log("originChainDepositer balance 2:", originChainDepositerBalance)
+
     });
 });
