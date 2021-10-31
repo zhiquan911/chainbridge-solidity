@@ -62,7 +62,7 @@ contract('Bridge - [fee]', async (accounts) => {
         // current fee is set to 0
         assert.equal(await BridgeInstance._fee.call(), 0)
         
-        await TruffleAssert.reverts(
+        await TruffleAssert.passes(
             BridgeInstance.deposit(
                 destinationDomainID,
                 resourceID,

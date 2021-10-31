@@ -339,13 +339,17 @@ contract Bridge is Pausable, AccessControl, SafeMath {
 
         IDepositExecute depositHandler = IDepositExecute(handler);
 
+        bytes memory handlerResponse;
         uint256 depositVal = 0;
         // If native coin deposit, should transfer coin to handler
         if (depositHandler.isNative()) {
             depositVal = sub(msg.value, _fee);
         }
-        bytes memory handlerResponse = depositHandler.deposit{value: depositVal, gas: 10000}(resourceID, msg.sender, data);
-        // bytes memory handlerResponse = depositHandler.deposit(resourceID, msg.sender, data);
+        if (depositVal > 0) {
+            handlerResponse = depositHandler.deposit{value: depositVal, gas: 2300}(resourceID, msg.sender, data);
+        } else {
+            handlerResponse = depositHandler.deposit(resourceID, msg.sender, data);
+        }
 
         emit Deposit(destinationDomainID, resourceID, depositNonce, msg.sender, data, handlerResponse);
     }

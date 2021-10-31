@@ -38,7 +38,15 @@ contract NativeHandler is IDepositExecute, HandlerHelpers, ERC20Safe {
     ) external payable override onlyBridge returns (bytes memory) {
         uint256        amount;
         (amount) = abi.decode(data, (uint));
-        require(msg.value == amount, "Incorrect amount");
+
+        address tokenAddress = _resourceIDToTokenContractAddress[resourceID];
+        require(_contractWhitelist[tokenAddress], "provided tokenAddress is not whitelisted");
+
+        if (_burnList[tokenAddress]) {
+            burnERC20(tokenAddress, depositer, amount);
+        } else {
+            require(msg.value == amount, "Incorrect amount");
+        }
     }
 
     /**

@@ -161,4 +161,11 @@ contract GenericHandler is IGenericHandler {
 
         _contractWhitelist[contractAddress] = true;
     }
+
+    /**
+        @notice is native coin
+     */
+    function isNative() external returns (bool) {
+        return false;
+    }
 }
