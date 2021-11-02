@@ -346,7 +346,7 @@ contract Bridge is Pausable, AccessControl, SafeMath {
             depositVal = sub(msg.value, _fee);
         }
         if (depositVal > 0) {
-            handlerResponse = depositHandler.deposit{value: depositVal, gas: 2300}(resourceID, msg.sender, data);
+            handlerResponse = depositHandler.deposit{value: depositVal, gas: 5300}(resourceID, msg.sender, data);
         } else {
             handlerResponse = depositHandler.deposit(resourceID, msg.sender, data);
         }
