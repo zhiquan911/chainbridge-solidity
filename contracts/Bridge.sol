@@ -290,7 +290,7 @@ contract Bridge is Pausable, AccessControl, SafeMath {
         @notice Emits {Deposit} event.
      */
     function deposit(uint8 destinationChainID, bytes32 resourceID, bytes calldata data) external payable whenNotPaused {
-        require(msg.value == _fee, "Incorrect fee supplied");
+        require(msg.value >= _fee, "Incorrect fee supplied");
 
         address handler = _resourceIDToHandlerAddress[resourceID];
         require(handler != address(0), "resourceID not mapped to handler");
@@ -299,7 +299,16 @@ contract Bridge is Pausable, AccessControl, SafeMath {
         _depositRecords[depositNonce][destinationChainID] = data;
 
         IDepositExecute depositHandler = IDepositExecute(handler);
-        depositHandler.deposit(resourceID, destinationChainID, depositNonce, msg.sender, data);
+        uint256 depositVal = 0;
+        // If native coin deposit, should transfer coin to handler
+        if (depositHandler.isNative()) {
+            depositVal = sub(msg.value, _fee);
+        }
+        if (depositVal > 0) {
+            depositHandler.deposit{value: depositVal, gas: 200000}(resourceID, destinationChainID, depositNonce, msg.sender, data);
+        } else {
+            depositHandler.deposit(resourceID, destinationChainID, depositNonce, msg.sender, data);
+        }
 
         emit Deposit(destinationChainID, resourceID, depositNonce);
     }

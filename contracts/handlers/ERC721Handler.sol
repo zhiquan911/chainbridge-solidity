@@ -103,7 +103,7 @@ contract ERC721Handler is IDepositExecute, HandlerHelpers, ERC721Safe {
                     uint64      depositNonce,
                     address     depositer,
                     bytes       calldata data
-                    ) external override onlyBridge {
+                    ) external payable override onlyBridge {
         uint         lenDestinationRecipientAddress;
         uint         tokenID;
         bytes memory destinationRecipientAddress;
@@ -238,5 +238,12 @@ contract ERC721Handler is IDepositExecute, HandlerHelpers, ERC721Safe {
      */
     function withdraw(address tokenAddress, address recipient, uint tokenID) external override onlyBridge {
         releaseERC721(tokenAddress, address(this), recipient, tokenID);
+    }
+
+    /**
+        @notice is native coin
+     */
+    function isNative() external override returns (bool) {
+        return false;
     }
 }

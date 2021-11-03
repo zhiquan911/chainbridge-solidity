@@ -1,29 +1,29 @@
+// SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity 0.6.4;
 pragma experimental ABIEncoderV2;
 
 import "../interfaces/IDepositExecute.sol";
 import "./HandlerHelpers.sol";
 import "../ERC20Safe.sol";
-import "@openzeppelin/contracts/presets/ERC20PresetMinterPauser.sol";
 
 /**
     @title Handles ERC20 deposits and deposit executions.
     @author ChainSafe Systems.
     @notice This contract is intended to be used with the Bridge contract.
  */
-contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
+contract NativeHandler is IDepositExecute, HandlerHelpers, ERC20Safe {
     struct DepositRecord {
         address _tokenAddress;
-        uint8    _lenDestinationRecipientAddress;
-        uint8   _destinationChainID;
+        uint8 _lenDestinationRecipientAddress;
+        uint8 _destinationChainID;
         bytes32 _resourceID;
-        bytes   _destinationRecipientAddress;
+        bytes _destinationRecipientAddress;
         address _depositer;
-        uint    _amount;
+        uint256 _amount;
     }
 
     // depositNonce => Deposit Record
-    mapping (uint8 => mapping(uint64 => DepositRecord)) public _depositRecords;
+    mapping(uint8 => mapping(uint64 => DepositRecord)) public _depositRecords;
 
     /**
         @param bridgeAddress Contract address of previously deployed Bridge.
@@ -38,13 +38,15 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         Also, these arrays must be ordered in the way that {initialResourceIDs}[0] is the intended resourceID for {initialContractAddresses}[0].
      */
     constructor(
-        address          bridgeAddress,
+        address bridgeAddress,
         bytes32[] memory initialResourceIDs,
         address[] memory initialContractAddresses,
         address[] memory burnableContractAddresses
     ) public {
-        require(initialResourceIDs.length == initialContractAddresses.length,
-            "initialResourceIDs and initialContractAddresses len mismatch");
+        require(
+            initialResourceIDs.length == initialContractAddresses.length,
+            "initialResourceIDs and initialContractAddresses len mismatch"
+        );
 
         _bridgeAddress = bridgeAddress;
 
@@ -69,7 +71,11 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         - _depositer Address that initially called {deposit} in the Bridge contract.
         - _amount Amount of tokens that were deposited.
     */
-    function getDepositRecord(uint64 depositNonce, uint8 destId) external view returns (DepositRecord memory) {
+    function getDepositRecord(uint64 depositNonce, uint8 destId)
+        external
+        view
+        returns (DepositRecord memory)
+    {
         return _depositRecords[destId][depositNonce];
     }
 
@@ -89,17 +95,16 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
      */
     function deposit(
         bytes32 resourceID,
-        uint8   destinationChainID,
-        uint64  depositNonce,
+        uint8 destinationChainID,
+        uint64 depositNonce,
         address depositer,
-        bytes   calldata data
+        bytes calldata data
     ) external payable override onlyBridge {
-        bytes   memory recipientAddress;
-        uint256        amount;
-        uint256        lenRecipientAddress;
+        bytes memory recipientAddress;
+        uint256 amount;
+        uint256 lenRecipientAddress;
 
         assembly {
-
             amount := calldataload(0xC4)
 
             recipientAddress := mload(0x40)
@@ -114,12 +119,15 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         }
 
         address tokenAddress = _resourceIDToTokenContractAddress[resourceID];
-        require(_contractWhitelist[tokenAddress], "provided tokenAddress is not whitelisted");
+        require(
+            _contractWhitelist[tokenAddress],
+            "provided tokenAddress is not whitelisted"
+        );
 
         if (_burnList[tokenAddress]) {
             burnERC20(tokenAddress, depositer, amount);
         } else {
-            lockERC20(tokenAddress, depositer, address(this), amount);
+            require(msg.value == amount, "Incorrect amount");
         }
 
         _depositRecords[destinationChainID][depositNonce] = DepositRecord(
@@ -143,16 +151,29 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         destinationRecipientAddress length     uint256     bytes  32 - 64
         destinationRecipientAddress            bytes       bytes  64 - END
      */
-    function executeProposal(bytes32 resourceID, bytes calldata data) external override onlyBridge {
-        uint256       amount;
-        bytes  memory destinationRecipientAddress;
+    function executeProposal(bytes32 resourceID, bytes calldata data)
+        external
+        override
+        onlyBridge
+    {
+        uint256 amount;
+        bytes memory destinationRecipientAddress;
 
         assembly {
             amount := calldataload(0x64)
 
             destinationRecipientAddress := mload(0x40)
             let lenDestinationRecipientAddress := calldataload(0x84)
-            mstore(0x40, add(0x20, add(destinationRecipientAddress, lenDestinationRecipientAddress)))
+            mstore(
+                0x40,
+                add(
+                    0x20,
+                    add(
+                        destinationRecipientAddress,
+                        lenDestinationRecipientAddress
+                    )
+                )
+            )
 
             // in the calldata the destinationRecipientAddress is stored at 0xC4 after accounting for the function signature and length declaration
             calldatacopy(
@@ -169,12 +190,17 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
             recipientAddress := mload(add(destinationRecipientAddress, 0x20))
         }
 
-        require(_contractWhitelist[tokenAddress], "provided tokenAddress is not whitelisted");
+        require(
+            _contractWhitelist[tokenAddress],
+            "provided tokenAddress is not whitelisted"
+        );
 
         if (_burnList[tokenAddress]) {
             mintERC20(tokenAddress, address(recipientAddress), amount);
         } else {
-            releaseERC20(tokenAddress, address(recipientAddress), amount);
+            //native coin release
+            address payable target = address(uint160(recipientAddress));
+            target.transfer(amount);
         }
     }
 
@@ -184,14 +210,20 @@ contract ERC20Handler is IDepositExecute, HandlerHelpers, ERC20Safe {
         @param recipient Address to release tokens to.
         @param amount The amount of ERC20 tokens to release.
      */
-    function withdraw(address tokenAddress, address recipient, uint amount) external override onlyBridge {
-        releaseERC20(tokenAddress, recipient, amount);
+    function withdraw(
+        address tokenAddress,
+        address recipient,
+        uint256 amount
+    ) external override onlyBridge {
+        //native coin release
+        address payable target = address(uint160(recipient));
+        target.transfer(amount);
     }
 
     /**
         @notice is native coin
      */
     function isNative() external override returns (bool) {
-        return false;
+        return true;
     }
 }

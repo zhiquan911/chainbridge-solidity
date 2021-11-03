@@ -58,6 +58,8 @@ module.exports = {
       host: "127.0.0.1",     // Localhost (default: none)
       port: 8545,            // Standard Ethereum port (default: none)
       network_id: "*",       // Any network (default: none)
+      gas: 5500000,        // Ropsten has a lower block limit than mainnet
+      gasPrice: 20000000000,  // 20 gwei (in wei) (default: 100 gwei)
      },
     // Another network with more advanced options...
     // advanced: {
