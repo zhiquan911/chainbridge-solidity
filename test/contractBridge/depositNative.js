@@ -81,7 +81,7 @@ contract('Bridge - [deposit - Native coin]', async (accounts) => {
             depositerAddress);
         withdrawDataHash = Ethers.utils.keccak256(OriginNativeHandlerInstance.address + withdrawData.substr(2));
 
-        vote = (relayer) => BridgeInstance2.voteProposal(originDomainID, expectedDepositNonce, resourceID, depositData, { from: relayer });
+        vote = (relayer) => BridgeInstance2.voteProposal(originDomainID, expectedDepositNonce, resourceID, depositDataHash, { from: relayer });
         executeProposal = (relayer) => BridgeInstance2.executeProposal(originDomainID, expectedDepositNonce, depositData, resourceID, { from: relayer });
     });
 
@@ -172,6 +172,15 @@ contract('Bridge - [deposit - Native coin]', async (accounts) => {
                 event.dataHash === depositDataHash
         });
 
+        const executionTx = await executeProposal(relayer1Address)
+
+        TruffleAssert.eventEmitted(executionTx, 'ProposalEvent', (event) => {
+            return event.originChainID.toNumber() === originDomainID &&
+                event.depositNonce.toNumber() === expectedDepositNonce &&
+                event.status.toNumber() === expectedExecutedEventStatus &&
+                event.dataHash === depositDataHash
+        });
+
         const destChainRecipientBalance = await DestinationERC20MintableInstance.balanceOf(recipientAddress);
         console.log("destChainRecipient balance:", destChainRecipientBalance.toNumber())
         assert.strictEqual(destChainRecipientBalance.toNumber(), depositAmount);
@@ -194,7 +203,8 @@ contract('Bridge - [deposit - Native coin]', async (accounts) => {
 
     it('Original Chain Execution successful', async () => {
 
-        const withdrawVote = (relayer) => BridgeInstance.voteProposal(originDomainID, expectedDepositNonce, resourceID, withdrawData, { from: relayer });
+        const withdrawVote = (relayer) => BridgeInstance.voteProposal(originDomainID, expectedDepositNonce, resourceID, withdrawDataHash, { from: relayer });
+        const withdrawExecuteProposal = (relayer) => BridgeInstance.executeProposal(originDomainID, expectedDepositNonce, withdrawData, resourceID, { from: relayer });
 
         await BridgeInstance.deposit(
             destinationDomainID,
@@ -215,6 +225,14 @@ contract('Bridge - [deposit - Native coin]', async (accounts) => {
             return event.originChainID.toNumber() === originDomainID &&
                 event.depositNonce.toNumber() === expectedDepositNonce &&
                 event.status.toNumber() === expectedFinalizedEventStatus &&
+                event.dataHash === withdrawDataHash
+        });
+
+        const executionTx = await withdrawExecuteProposal(relayer1Address)
+        TruffleAssert.eventEmitted(executionTx, 'ProposalEvent', (event) => {
+            return event.originChainID.toNumber() === originDomainID &&
+                event.depositNonce.toNumber() === expectedDepositNonce &&
+                event.status.toNumber() === expectedExecutedEventStatus &&
                 event.dataHash === withdrawDataHash
         });
 
